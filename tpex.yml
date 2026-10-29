@@ -1,0 +1,20 @@
+name: tpex-daily
+on:
+  schedule:
+    - cron: '0 8,9,10,12 * * 1-5'   # 16:00/17:00/18:00/20:00 Taipei, retries; idempotent
+  workflow_dispatch:
+    inputs: {date: {description: 'YYYY-MM-DD (optional)', required: false}}
+permissions: {contents: write}
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: fetch
+        run: |
+          D="${{ github.event.inputs.date }}"; [ -z "$D" ] && D=$(TZ=Asia/Taipei date +%F)
+          mkdir -p data && cd data && python3 ../tpex_relay.py "$D" || { rc=$?; [ $rc = 3 ] && echo "no data yet/holiday" && exit 0; exit $rc; }
+      - name: commit
+        run: |
+          git config user.name tpex-bot; git config user.email tpex-bot@users.noreply.github.com
+          git add -A; git diff --cached --quiet || (git commit -m "tpex $(TZ=Asia/Taipei date +%F)" && git push)
